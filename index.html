@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoOMR - AI 기반 스마트 자동 채점 학습 프로그램</title>
+  <meta name="description" content="문제집 정답 관리, OMR 답안 입력, 자동 채점 및 오답 분석을 지원하는 직관적인 웹 학습 도구">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/ocr-style.css">
+  <!-- Tesseract.js: 브라우저 내 OCR (무료, 외부 API 없음) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+
+  <!-- 상단 글로벌 헤더 -->
+  <header class="app-header">
+    <div class="header-container">
+      <a href="#" class="app-brand" id="brandHomeLink">
+        <div class="brand-icon">✓</div>
+        <div class="brand-title">AutoOMR</div>
+        <span class="brand-badge">스마트 채점</span>
+      </a>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" id="btnHeaderHome" style="display: none;">
+          홈으로
+        </button>
+        <button class="btn btn-primary btn-sm" id="btnHeaderNewWorkbook">
+          + 새 문제집 등록
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 애플리케이션 영역 -->
+  <main class="app-main">
+
+    <!-- ====================================================================
+         VIEW A: 홈 화면 (문제집 목록 및 통계)
+         ==================================================================== -->
+    <section id="viewHome" class="view-container active">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">내 문제집 보관함</h1>
+          <p class="section-subtitle">문제집을 등록하고 OMR 답안을 입력하여 즉시 자동 채점하세요.</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" id="btnHomeCreateWorkbook">
+            + 새 문제집 등록
+          </button>
+        </div>
+      </div>
+
+      <!-- 문제집 카드 목록 그리드 -->
+      <div id="workbookGrid" class="workbook-grid">
+        <!-- JS로 동적 렌더링 -->
+      </div>
+
+      <!-- 등록된 문제집이 없을 때 표시되는 빈 상태 -->
+      <div id="homeEmptyState" class="empty-state" style="display: none;">
+        <div class="empty-icon">📝</div>
+        <h2 class="empty-title">등록된 문제집이 없습니다</h2>
+        <p class="empty-desc">새 문제집을 등록하거나 기본 샘플 문제집을 생성하여 바로 채점을 시작해보세요.</p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="btnEmptyCreate">새 문제집 등록하기</button>
+          <button class="btn btn-secondary" id="btnEmptySample">샘플 문제집 불러오기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW B: 문제집 등록 및 편집 화면
+         ==================================================================== -->
+    <section id="viewEditor" class="view-container">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title" id="editorTitle">새 문제집 등록</h1>
+          <p class="section-subtitle">문제집 기본 정보와 5지선다 정답을 입력하세요. 미등록 정답은 채점에서 제외됩니다.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" id="btnCancelEditor">취소</button>
+          <button class="btn btn-primary" id="btnSaveWorkbook">문제집 저장</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <form id="workbookForm" onsubmit="return false;">
+          <input type="hidden" id="editWorkbookId" value="">
+
+          <div class="grid-2col">
+            <div class="form-group">
+              <label class="form-label" for="wbTitleInput">문제집 이름 <span class="req">*</span></label>
+              <input type="text" id="wbTitleInput" class="form-input" placeholder="예: 2025학년도 6월 모의평가 영어영역" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wbSubjectInput">과목명 <span class="req">*</span></label>
+              <input type="text" id="wbSubjectInput" class="form-input" list="subjectDatalist" placeholder="예: 국어, 영어, 수학, 과학..." required>
+              <datalist id="subjectDatalist">
+                <option value="국어">
+                <option value="수학">
+                <option value="영어">
+                <option value="한국사">
+                <option value="사회탐구">
+                <option value="과학탐구">
+                <option value="자격증/기타">
+              </datalist>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="wbTotalCountInput">총 문제 수 <span class="req">*</span> (1 ~ 100)</label>
+            <div style="display: flex; gap: 0.75rem; align-items: center; max-width: 320px;">
+              <input type="number" id="wbTotalCountInput" class="form-input" min="1" max="100" value="20" required>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnApplyQuestionCount">칸 적용</button>
+            </div>
+            <p class="form-hint">문제 수를 변경하면 아래 정답 입력란이 자동으로 조정됩니다.</p>
+          </div>
+
+          <!-- 빠른 정답 일괄 입력 도구 -->
+          <div class="quick-input-box">
+            <div class="quick-input-header">
+              <span>⚡ 빠른 정답 일괄 입력 (연속 번호 붙여넣기)</span>
+              <div class="quick-input-tools">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnClearAllAnswers">정답 전체 비우기</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <input type="text" id="quickAnswerString" class="form-input" style="flex: 1; min-width: 220px;" placeholder="예: 1352421345 또는 1,3,5,2,4...">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnApplyQuickAnswers">일괄 적용</button>
+            </div>
+            <p class="form-hint">숫자(1~5)만 순서대로 추출하여 1번 문제부터 자동으로 정답을 채워 넣습니다.</p>
+          </div>
+
+          <!-- 정답 현황 요약 배지 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div style="font-weight: 700; color: var(--slate-800); font-size: 0.95rem;">
+              각 문제별 정답 설정 (5지선다)
+            </div>
+            <div id="editorAnswerStats" style="font-size: 0.85rem; color: var(--slate-600);">
+              등록: <strong id="registeredAnsCount" style="color: var(--primary);">0</strong> / <span id="totalAnsCount">20</span>개
+              <span id="unregisteredAnsCountBadge" class="badge badge-warning" style="margin-left: 0.35rem;">미등록 20개</span>
+            </div>
+          </div>
+
+          <!-- 정답 선택 매트릭스 그리드 -->
+          <div id="answerKeyMatrix" class="answer-key-matrix">
+            <!-- JS로 동적 생성 -->
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW C: 답안 입력 화면 (Solving / OMR Sheet)
+         ==================================================================== -->
+    <section id="viewSolver" class="view-container">
+      <!-- 상단 풀이 상태 바 -->
+      <div class="exam-bar">
+        <div class="exam-title-box">
+          <span class="badge badge-subject" id="solverSubjectBadge">과목</span>
+          <h2 class="exam-title" id="solverExamTitle">문제집 제목</h2>
+        </div>
+        <div class="autosave-indicator" id="solverAutosaveStatus">
+          <span class="autosave-dot"></span> 자동 저장됨
+        </div>
+      </div>
+
+      <!-- 메인 OMR 레이아웃 -->
+      <div class="omr-layout">
+        <!-- 좌측: 현재 문제 마킹 카드 -->
+        <div class="single-question-card">
+          <div class="q-header-meta">
+            <span class="q-badge" id="currentQBadge">문제 1 / 20</span>
+            <span style="font-size: 0.85rem; color: var(--slate-500);">
+              키보드 <kbd style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">1~5</kbd> 마킹, <kbd style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">←</kbd> <kbd style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">→</kbd> 이동
+            </span>
+          </div>
+
+          <div class="q-display-number" id="currentQDisplay">1</div>
+          <p class="q-guide-text">해당 문제의 답안 번호를 선택하세요. (다시 누르면 취소)</p>
+
+          <!-- ① ~ ⑤ OMR 버블 마킹 버튼 -->
+          <div class="omr-marking-row">
+            <button type="button" class="omr-bubble-btn" data-choice="1" id="btnBubble1">①</button>
+            <button type="button" class="omr-bubble-btn" data-choice="2" id="btnBubble2">②</button>
+            <button type="button" class="omr-bubble-btn" data-choice="3" id="btnBubble3">③</button>
+            <button type="button" class="omr-bubble-btn" data-choice="4" id="btnBubble4">④</button>
+            <button type="button" class="omr-bubble-btn" data-choice="5" id="btnBubble5">⑤</button>
+          </div>
+
+          <!-- 이전 / 다음 문제 이동 버튼 -->
+          <div class="question-nav-controls">
+            <button type="button" class="btn btn-secondary" id="btnPrevQuestion">
+              ← 이전 문제
+            </button>
+            <button type="button" class="btn btn-primary" id="btnNextQuestion">
+              다음 문제 →
+            </button>
+          </div>
+        </div>
+
+        <!-- 우측: OMR 전체 시트 네비게이터 (Quick Nav) -->
+        <div class="omr-sheet-navigator">
+          <div class="omr-nav-header">
+            <div class="omr-nav-title">OMR 답안 시트</div>
+            <div class="omr-nav-stats" id="omrNavStats">
+              마킹: <strong id="omrMarkedCount">0</strong> / <span id="omrTotalCount">20</span>
+            </div>
+          </div>
+
+          <!-- 1번부터 N번까지 한눈에 보이는 그리드 -->
+          <div class="omr-nav-grid" id="omrNavGrid">
+            <!-- JS로 동적 생성 -->
+          </div>
+
+          <div class="omr-nav-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnResetDraftAnswers">
+              답안 전체 초기화
+            </button>
+            <button type="button" class="btn btn-primary btn-lg" id="btnOpenSubmitModal">
+              답안 확인 및 제출
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW D: 채점 결과 화면 (Score Result)
+         ==================================================================== -->
+    <section id="viewResult" class="view-container">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">채점 결과 리포트</h1>
+          <p class="section-subtitle" id="resultReportSubtext">정답지와 사용자 답안을 비교 분석한 결과입니다.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary" id="btnResultGoHome">홈으로</button>
+          <button class="btn btn-primary" id="btnResultRetake">다시 풀기</button>
+        </div>
+      </div>
+
+      <!-- 상단 종합 스코어보드 배너 -->
+      <div class="score-summary-banner">
+        <div class="score-main-stats">
+          <div class="score-exam-name" id="resultExamTitle">2025학년도 수능 국어</div>
+          <div class="score-big-number" id="resultScoreDisplay">
+            <span id="resultAccuracyRate">0</span><span style="font-size: 2rem;">%</span>
+          </div>
+          <div class="score-accuracy-badge" id="resultGradableSummary">
+            채점 기준: 총 20문제 중 18문제 채점 가능
+          </div>
+        </div>
+
+        <div class="score-metric-boxes">
+          <div class="metric-pill metric-correct">
+            <div class="metric-pill-val" id="resultCorrectCount">0</div>
+            <div class="metric-pill-label">정답 (맞음)</div>
+          </div>
+          <div class="metric-pill metric-wrong">
+            <div class="metric-pill-val" id="resultIncorrectCount">0</div>
+            <div class="metric-pill-label">오답 (틀림)</div>
+          </div>
+          <div class="metric-pill metric-unanswered">
+            <div class="metric-pill-val" id="resultUnansweredCount">0</div>
+            <div class="metric-pill-label">미응답</div>
+          </div>
+          <div class="metric-pill metric-excluded">
+            <div class="metric-pill-val" id="resultExcludedCount">0</div>
+            <div class="metric-pill-label">채점 제외</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 필터 탭 바 (전체 / 오답만 보기 / 정답만 보기 등) -->
+      <div class="result-filter-bar">
+        <span style="font-weight: 700; font-size: 0.9rem; color: var(--slate-700); margin-right: 0.25rem;">필터:</span>
+        <button type="button" class="filter-tab-btn active" data-filter="ALL">전체 문제 (<span id="filterCountAll">0</span>)</button>
+        <button type="button" class="filter-tab-btn" data-filter="INCORRECT_ONLY" style="color: var(--danger);">🚨 오답만 모아보기 (<span id="filterCountIncorrect">0</span>)</button>
+        <button type="button" class="filter-tab-btn" data-filter="CORRECT_ONLY" style="color: var(--success);">✓ 정답만 보기 (<span id="filterCountCorrect">0</span>)</button>
+        <button type="button" class="filter-tab-btn" data-filter="UNANSWERED_ONLY">미응답 (<span id="filterCountUnanswered">0</span>)</button>
+        <button type="button" class="filter-tab-btn" data-filter="EXCLUDED_ONLY">채점 제외 (<span id="filterCountExcluded">0</span>)</button>
+      </div>
+
+      <!-- 문제별 상세 결과 카드 리스트 -->
+      <div class="result-details-grid" id="resultDetailsGrid">
+        <!-- JS로 동적 생성 -->
+      </div>
+
+      <!-- 하단 액션 바 -->
+      <div class="result-actions-bar">
+        <button type="button" class="btn btn-secondary" id="btnResultEditWorkbook">
+          ✏️ 정답지 수정하기
+        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn btn-secondary" id="btnResultEditAnswers">
+            ✍️ 답안 수정하여 다시 채점
+          </button>
+          <button type="button" class="btn btn-primary" id="btnResultRetakeBottom">
+            🔄 새로 다시 풀기
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW E: OCR 정답 추출기
+         ==================================================================== -->
+    <section id="viewOcr" class="view-container">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">📷 정답지 사진으로 정답 추출</h1>
+          <p class="section-subtitle" id="ocrViewSubtitle">이미지를 업로드하면 OCR로 정답을 자동 인식합니다.</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary" id="btnOcrCancel">취소</button>
+        </div>
+      </div>
+
+      <!-- 단계 표시 -->
+      <div class="ocr-step-indicator" id="ocrStepIndicator">
+        <div class="ocr-step" id="ocrStep1">
+          <div class="ocr-step-num">1</div>
+          <span class="ocr-step-label">이미지 선택</span>
+        </div>
+        <div class="ocr-step-arrow">›</div>
+        <div class="ocr-step" id="ocrStep2">
+          <div class="ocr-step-num">2</div>
+          <span class="ocr-step-label">텍스트 인식</span>
+        </div>
+        <div class="ocr-step-arrow">›</div>
+        <div class="ocr-step" id="ocrStep3">
+          <div class="ocr-step-num">3</div>
+          <span class="ocr-step-label">결과 검토</span>
+        </div>
+        <div class="ocr-step-arrow">›</div>
+        <div class="ocr-step" id="ocrStep4">
+          <div class="ocr-step-num">4</div>
+          <span class="ocr-step-label">저장 확인</span>
+        </div>
+      </div>
+
+      <div class="card">
+
+        <!-- STEP 1: 이미지 업로드 -->
+        <div id="ocrPanelUpload">
+          <!-- 숨김 파일 입력 (카메라 / 갤러리 공용) -->
+          <input type="file" id="ocrFileInputCamera"
+            class="ocr-file-input-hidden"
+            accept="image/*" capture="environment">
+          <input type="file" id="ocrFileInputGallery"
+            class="ocr-file-input-hidden"
+            accept="image/*">
+
+          <div class="ocr-upload-zone" id="ocrUploadZone">
+            <span class="ocr-upload-icon">📷</span>
+            <div class="ocr-upload-title">정답지 이미지를 업로드하세요</div>
+            <div class="ocr-upload-hint">지원 형식: 번호+정답 쌍 (예: "1. ③", "1번 3", "1-3")<br>또는 "정답:" 표식이 있는 연속 나열 형식</div>
+            <div class="ocr-upload-btns">
+              <button type="button" class="btn btn-primary" id="btnOcrCamera">📷 카메라 촬영</button>
+              <button type="button" class="btn btn-secondary" id="btnOcrGallery">🖼 갤러리에서 선택</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 이미지 미리보기 (선택 후 표시) -->
+        <div id="ocrPreviewSection" style="display:none; margin-top:1rem;">
+          <div class="ocr-preview-wrap">
+            <img id="ocrPreviewImg" class="ocr-preview-img" src="" alt="미리보기">
+            <button type="button" class="ocr-preview-change-btn" id="btnOcrChangeImage">이미지 변경</button>
+          </div>
+          <div style="margin-top:1rem; text-align:right;">
+            <button type="button" class="btn btn-primary" id="btnOcrStartRecognize">텍스트 인식 시작 →</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: OCR 진행 중 -->
+        <div id="ocrPanelProgress" style="display:none;">
+          <div class="ocr-progress-wrap">
+            <span class="ocr-progress-icon">⚙️</span>
+            <div class="ocr-progress-label" id="ocrProgressLabel">이미지 분석 중...</div>
+            <div class="ocr-progress-bar-track">
+              <div class="ocr-progress-bar-fill" id="ocrProgressBarFill" style="width:0%"></div>
+            </div>
+            <div class="ocr-progress-pct" id="ocrProgressPct">0%</div>
+          </div>
+        </div>
+
+        <!-- STEP 3 & 4: 추출 결과 검토 -->
+        <div id="ocrPanelResult" style="display:none;">
+
+          <!-- OCR 신뢰도 안내 -->
+          <div class="ocr-result-header">
+            <div class="ocr-result-meta" id="ocrResultMeta"></div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnOcrRerun">🔄 다시 인식</button>
+          </div>
+
+          <!-- 파싱 경고 배너 -->
+          <div class="ocr-warning-box" id="ocrWarningBox" style="display:none;">
+            <div class="ocr-warning-title">⚠️ 인식 주의 항목</div>
+            <ul class="ocr-warning-list" id="ocrWarningList"></ul>
+          </div>
+
+          <!-- 인식 결과 없음 안내 -->
+          <div class="ocr-no-result-box" id="ocrNoResultBox" style="display:none;">
+            <span class="ocr-no-result-icon">🔍</span>
+            <div class="ocr-no-result-title">정답을 인식하지 못했습니다</div>
+            <p class="ocr-no-result-desc">
+              지원 형식: <strong>번호+정답 쌍</strong> (예: "1. ③", "1번 3", "1-3") 또는<br>
+              <strong>정답: 1 3 5 2 4 ...</strong> 형식 (명시적 표식 필요)
+            </p>
+          </div>
+
+          <!-- 문항별 정답 검토 카드 그리드 -->
+          <div class="ocr-items-grid" id="ocrItemsGrid"></div>
+
+          <!-- 기존 정답과의 변경 사항 미리보기 (Diff 패널) -->
+          <div class="ocr-diff-panel" id="ocrDiffPanel" style="display:none;">
+            <div class="ocr-diff-header">📋 기존 정답과의 변경 사항 미리보기 (저장 전 확인)</div>
+            <ul class="ocr-diff-list" id="ocrDiffList"></ul>
+          </div>
+
+          <!-- 오류 상태 -->
+          <div class="ocr-error-box" id="ocrErrorBox" style="display:none;">
+            <div class="ocr-error-title">❌ 오류가 발생했습니다</div>
+            <div class="ocr-error-detail" id="ocrErrorDetail"></div>
+          </div>
+
+          <!-- 하단 액션 바 -->
+          <div class="ocr-action-bar" id="ocrActionBar" style="display:none;">
+            <button type="button" class="btn btn-secondary" id="btnOcrRetry">↺ 다른 이미지로 다시 시도</button>
+            <button type="button" class="btn btn-primary" id="btnOcrApplyConfirm">✅ 정답 적용 및 저장</button>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ====================================================================
+       모달 다이얼로그 (Modals)
+       ==================================================================== -->
+
+  <!-- 1. 답안 제출 전 최종 확인 모달 -->
+  <div class="modal-backdrop" id="modalSubmitReview">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">답안 제출 전 확인</h3>
+        <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 1rem; color: var(--slate-700);" id="modalSubmitSummaryText">
+          모든 답안을 확인했습니다.
+        </p>
+
+        <!-- 미응답 문제 알림 영역 -->
+        <div id="unansweredWarningBox" style="background: var(--warning-bg); border: 1px solid var(--warning-border); padding: 0.9rem; border-radius: var(--radius-md); margin-bottom: 1rem; display: none;">
+          <div style="font-weight: 700; color: #92400e; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem;">
+            ⚠️ 미응답 문제가 있습니다!
+          </div>
+          <div style="font-size: 0.85rem; color: #78350f; margin-bottom: 0.5rem;" id="unansweredSummaryText">
+            총 3문제가 아직 마킹되지 않았습니다.
+          </div>
+          <div id="unansweredBadgesList" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+            <!-- 미응답 번호 배지 -->
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--slate-500);">
+          제출 후 즉시 자동 채점되며, 필요 시 언제든지 답안을 수정하여 재채점할 수 있습니다.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal>계속 풀기</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmFinalSubmit">최종 제출 및 채점</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. OCR 정답 적용 최종 확인 모달 -->
+  <div class="modal-backdrop" id="modalOcrConfirm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">📋 정답 저장 확인</h3>
+        <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--slate-700); margin-bottom:1rem;" id="modalOcrSummaryText">
+          추출된 정답을 저장합니다.
+        </p>
+        <div id="modalOcrDiffPreview" style="font-size:0.88rem; color:var(--slate-600);"></div>
+        <p style="font-size:0.85rem; color:var(--slate-500); margin-top:1rem;">
+          ⚠️ OCR 결과에 없는 기존 정답은 삭제되지 않습니다. 추출된 항목만 추가·수정됩니다.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal>취소</button>
+        <button type="button" class="btn btn-primary" id="btnOcrConfirmSave">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 문제집 삭제 확인 모달 -->
+  <div class="modal-backdrop" id="modalDeleteWorkbook">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">문제집 삭제</h3>
+        <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--slate-800); font-weight: 600; margin-bottom: 0.5rem;" id="modalDeleteWbTitle">
+          문제집을 삭제하시겠습니까?
+        </p>
+        <p style="font-size: 0.88rem; color: var(--danger);">
+          이 문제집과 관련된 모든 풀이 기록 및 임시 작성 답안도 영구적으로 함께 삭제됩니다. 이 작업은 취소할 수 없습니다.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal>취소</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmDeleteWorkbook">삭제하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 컨테이너 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 스크립트 로드 순서: Storage → Scoring → AnswerExtractor → OcrEngine → App -->
+  <script src="js/storage.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/answer-extractor.js"></script>
+  <script src="js/ocr-engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

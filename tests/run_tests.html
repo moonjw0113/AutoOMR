@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>AutoOMR 단위 테스트 및 검증 스위트</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 2rem; background: #f8fafc; color: #1e293b; }
+    h1 { margin-bottom: 1rem; }
+    .test-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+    .pass { border-left: 5px solid #16a34a; }
+    .fail { border-left: 5px solid #dc2626; background: #fef2f2; }
+    .tag { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+    .tag-pass { background: #dcfce7; color: #166534; }
+    .tag-fail { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>🧪 AutoOMR 핵심 비즈니스 로직 단위 테스트</h1>
+  <div id="testResults">테스트 실행 중...</div>
+
+  <script src="../js/scoring.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/answer-extractor.js"></script>
+  <script>
+    const resultsContainer = document.getElementById('testResults');
+    resultsContainer.innerHTML = '';
+
+    let passedCount = 0;
+    let failedCount = 0;
+
+    function assert(name, condition, details = '') {
+      const card = document.createElement('div');
+      card.className = `test-card ${condition ? 'pass' : 'fail'}`;
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>${name}</strong>
+          <span class="tag ${condition ? 'tag-pass' : 'tag-fail'}">${condition ? 'PASS' : 'FAIL'}</span>
+        </div>
+        ${details ? `<div style="font-size: 0.85rem; color: #64748b; margin-top: 0.5rem;">${details}</div>` : ''}
+      `;
+      resultsContainer.appendChild(card);
+      if (condition) passedCount++; else failedCount++;
+    }
+
+    try {
+      // Test 1: 만점 테스트 (정답률 100%)
+      const wb1 = {
+        totalQuestions: 5,
+        answerKey: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 }
+      };
+      const ans1 = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+      const res1 = ScoringEngine.grade(wb1, ans1);
+      assert('1. 만점 채점 테스트', 
+        res1.correctCount === 5 && res1.incorrectCount === 0 && res1.accuracyRate === 100,
+        `정답: ${res1.correctCount}/5, 오답: ${res1.incorrectCount}, 정답률: ${res1.accuracyRate}%`
+      );
+
+      // Test 2: 미등록 정답 처리 (오답 처리 제외 및 채점 가능 문제 수 분리)
+      const wb2 = {
+        totalQuestions: 5,
+        answerKey: { 1: 1, 2: 2, 3: 3 } // 4, 5번은 미등록
+      };
+      const ans2 = { 1: 1, 2: 5, 3: 3, 4: 2, 5: 1 };
+      const res2 = ScoringEngine.grade(wb2, ans2);
+      assert('2. 미등록 정답 채점 제외 테스트',
+        res2.gradableCount === 3 && res2.excludedCount === 2 && res2.correctCount === 2 && res2.incorrectCount === 1,
+        `채점가능: ${res2.gradableCount}, 제외: ${res2.excludedCount}, 정답: ${res2.correctCount}, 오답: ${res2.incorrectCount}, 정답률: ${res2.accuracyRate}% (기대치: 66.7%)`
+      );
+
+      // Test 3: 정답 등록이 0개일 때 정답률 미표시(null) 처리
+      const wb3 = {
+        totalQuestions: 10,
+        answerKey: {} // 모두 미등록
+      };
+      const ans3 = { 1: 1, 2: 2 };
+      const res3 = ScoringEngine.grade(wb3, ans3);
+      assert('3. 정답 0개 등록 시 정답률 null 처리 테스트',
+        res3.gradableCount === 0 && res3.accuracyRate === null && res3.excludedCount === 10,
+        `채점가능: ${res3.gradableCount}, 정답률: ${res3.accuracyRate}`
+      );
+
+      // Test 4: 미응답 문제 채점 처리 (채점 가능 문제 중 미응답)
+      const wb4 = {
+        totalQuestions: 4,
+        answerKey: { 1: 1, 2: 2, 3: 3, 4: 4 }
+      };
+      const ans4 = { 1: 1 }; // 2, 3, 4번 미응답
+      const res4 = ScoringEngine.grade(wb4, ans4);
+      assert('4. 채점 가능 문제 중 미응답 처리 테스트',
+        res4.correctCount === 1 && res4.incorrectCount === 3 && res4.totalUnansweredCount === 3 && res4.accuracyRate === 25,
+        `정답: ${res4.correctCount}, 오답(미응답 포함): ${res4.incorrectCount}, 정답률: ${res4.accuracyRate}%`
+      );
+
+      // Test 5: 오답만 필터링 기능 테스트
+      const wrongList = ScoringEngine.filterDetails(res4.details, 'INCORRECT_ONLY');
+      assert('5. 오답만 모아보기 필터 테스트',
+        wrongList.length === 3 && wrongList.every(item => item.isGradable && !item.isCorrect),
+        `오답 필터링 수: ${wrongList.length}개`
+      );
+
+      // Test 6: StorageManager 고유 ID 생성 및 정답 변경 시 동기화 재채점
+      const mockWb = {
+        id: 'wb_test_sync',
+        title: '동기화 테스트',
+        subject: '영어',
+        totalQuestions: 2,
+        answerKey: { 1: 1, 2: 2 },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const mockSubmission = {
+        id: 'sub_test_sync',
+        workbookId: 'wb_test_sync',
+        userAnswers: { 1: 1, 2: 3 }, // 1번 맞음, 2번 틀림 (정답률 50%)
+        scoreResult: ScoringEngine.grade(mockWb, { 1: 1, 2: 3 }),
+        submittedAt: new Date().toISOString()
+      };
+      // 로컬스토리지에 임시 저장
+      StorageManager.set('autoomr_workbooks', [mockWb]);
+      StorageManager.set('autoomr_submissions', [mockSubmission]);
+
+      // 정답 수정: 2번 정답을 2에서 3으로 변경 (이제 둘 다 맞아서 100%)
+      const updatedWb = { ...mockWb, answerKey: { 1: 1, 2: 3 } };
+      StorageManager.saveWorkbook(updatedWb);
+
+      const refreshedSub = StorageManager.getSubmissionById('sub_test_sync');
+      assert('6. 문제집 정답 수정 시 기존 제출 기록 자동 재채점 동기화 테스트',
+        refreshedSub && refreshedSub.scoreResult && refreshedSub.scoreResult.accuracyRate === 100,
+        `수정 전 정답률: 50% -> 수정 후 동기화된 정답률: ${refreshedSub ? refreshedSub.scoreResult.accuracyRate : 0}%`
+      );
+
+    } catch (e) {
+      assert('테스트 실행 에러', false, e.toString());
+    }
+
+    // ─── OCR AnswerExtractor 파서 테스트 ───────────────────────────────
+    try {
+      // Test 7: 원형 숫자(①~⑤) 및 번호+정답 쌍 형식 파싱
+      const text7 = '1. ① 2. ② 3. ③ 4. ④ 5. ⑤';
+      const res7 = AnswerExtractor.extractFromText(text7);
+      assert('7. 원형 숫자 번호+정답 쌍 파싱 (①~⑤)',
+        res7.items.length === 5
+        && res7.items[0].q === 1 && res7.items[0].answer === 1
+        && res7.items[4].q === 5 && res7.items[4].answer === 5
+        && res7.detectedFormat === 'FORMAT_A',
+        `인식: ${res7.items.length}개, 형식: ${res7.detectedFormat}, 1번=${res7.items[0]?.answer}, 5번=${res7.items[4]?.answer}`
+      );
+
+      // Test 8: 다양한 구분자 형식 (번. 정, 번-정, 번: 정, 붙여쓰기)
+      const text8 = '1. 3\n2번 4\n3-5\n4: 2\n5①';
+      const res8 = AnswerExtractor.extractFromText(text8);
+      assert('8. 다양한 구분자 형식 파싱 (., 번, -, :, 붙여쓰기)',
+        res8.items.length === 5
+        && res8.items[0].answer === 3
+        && res8.items[1].answer === 4
+        && res8.items[2].answer === 5
+        && res8.items[3].answer === 2
+        && res8.items[4].answer === 1,
+        `인식: ${res8.items.length}개 → ${res8.items.map(i=>`${i.q}:${i.answer}`).join(', ')}`
+      );
+
+      // Test 9: 명시적 "정답:" 표식 있는 연속 나열 (형식 B)
+      const text9 = '정답: 1 3 5 2 4';
+      const res9 = AnswerExtractor.extractFromText(text9);
+      assert('9. 명시적 표식 있는 연속 나열 형식 파싱 (형식 B)',
+        res9.items.length === 5
+        && res9.items[0].q === 1 && res9.items[0].answer === 1
+        && res9.items[1].q === 2 && res9.items[1].answer === 3
+        && res9.detectedFormat === 'FORMAT_B',
+        `인식: ${res9.items.length}개, 형식: ${res9.detectedFormat}, 1번=${res9.items[0]?.answer}, 2번=${res9.items[1]?.answer}`
+      );
+
+      // Test 10: 명시적 표식 없는 연속 숫자만 → 파싱 안 함 (안전 조건 1)
+      const text10 = '1 3 5 2 4'; // 표식 없음
+      const res10 = AnswerExtractor.extractFromText(text10);
+      assert('10. 명시적 표식 없는 연속 숫자 → 파싱 거부 (안전 조건 1)',
+        res10.items.length === 0 && res10.detectedFormat === 'NONE',
+        `인식된 항목 수: ${res10.items.length} (기대치: 0), 형식: ${res10.detectedFormat}`
+      );
+
+      // Test 11: 누락 문항 및 충돌 문항 검출
+      const text11 = '1. 2\n2. 3\n2. 5\n4. 1'; // 3번 누락, 2번 충돌(3 vs 5)
+      const res11 = AnswerExtractor.extractFromText(text11);
+      const conflictItem = res11.items.find(i => i.q === 2);
+      assert('11. 누락 문항 및 충돌 문항 검출',
+        res11.missingQuestions.includes(3)
+        && conflictItem !== undefined
+        && conflictItem.answer === null
+        && conflictItem.parseConfidence === 'UNCERTAIN'
+        && res11.warnings.some(w => w.type === 'CONFLICT' && w.q === 2),
+        `누락: ${res11.missingQuestions.join(',')}, 2번 answer=${conflictItem?.answer}, conf=${conflictItem?.parseConfidence}, 경고수=${res11.warnings.length}`
+      );
+
+      // Test 12: 동일 번호 동일 정답 중복(DUPLICATE) 검출 및 단일 항목 병합
+      const text12 = '1. 3\n1. 3\n2. 4';
+      const res12 = AnswerExtractor.extractFromText(text12);
+      assert('12. 동일 번호 동일 정답 중복(DUPLICATE) 검출 및 병합',
+        res12.items.length === 2
+        && res12.items[0].q === 1 && res12.items[0].answer === 3
+        && res12.warnings.some(w => w.type === 'DUPLICATE' && w.q === 1),
+        `항목수: ${res12.items.length}, 경고: ${res12.warnings.map(w=>w.type).join(',')}`
+      );
+
+      // Test 13: 두 자리 숫자/점수 오인식 방지 (1. 50점 등은 1번 정답 5로 파싱하지 않음)
+      const text13 = '1. 50\n2. 12';
+      const res13 = AnswerExtractor.extractFromText(text13);
+      assert('13. 두 자리 이상 숫자/점수 오인식 방지 (1. 50 등 거부)',
+        res13.items.length === 0,
+        `인식된 항목 수: ${res13.items.length} (기대치: 0)`
+      );
+
+    } catch (e) {
+      assert('OCR 파서 테스트 실행 에러', false, e.toString());
+    }
+
+    const summary = document.createElement('h3');
+    summary.style.marginTop = '1.5rem';
+    summary.textContent = `테스트 결과 요약: 총 ${passedCount + failedCount}개 중 ${passedCount}개 성공, ${failedCount}개 실패`;
+    summary.style.color = failedCount === 0 ? '#16a34a' : '#dc2626';
+    resultsContainer.prepend(summary);
+  </script>
+</body>
+</html>
+

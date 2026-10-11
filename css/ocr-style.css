@@ -1,0 +1,480 @@
+/* ==========================================================================
+   AutoOMR - OCR 정답 추출기 전용 스타일
+   기존 style.css의 CSS 변수(--primary, --danger 등)를 그대로 사용한다.
+   ========================================================================== */
+
+/* ─── VIEW E: OCR 정답 추출기 레이아웃 ─── */
+
+.ocr-step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.ocr-step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--slate-400);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ocr-step.active {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.ocr-step.done {
+  color: var(--success);
+}
+
+.ocr-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--slate-200);
+  color: var(--slate-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ocr-step.active .ocr-step-num {
+  background: var(--primary);
+  color: #fff;
+}
+
+.ocr-step.done .ocr-step-num {
+  background: var(--success);
+  color: #fff;
+}
+
+.ocr-step-arrow {
+  color: var(--slate-300);
+  margin: 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+/* ─── 업로드 영역 ─── */
+
+.ocr-upload-zone {
+  border: 2px dashed var(--slate-300);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--slate-50);
+  position: relative;
+}
+
+.ocr-upload-zone:hover,
+.ocr-upload-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.ocr-upload-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.ocr-upload-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  margin-bottom: 0.5rem;
+}
+
+.ocr-upload-hint {
+  font-size: 0.85rem;
+  color: var(--slate-500);
+  margin-bottom: 1.25rem;
+}
+
+.ocr-upload-btns {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ─── 이미지 미리보기 ─── */
+
+.ocr-preview-wrap {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  max-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ocr-preview-img {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+}
+
+.ocr-preview-change-btn {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+
+/* ─── OCR 진행 상태 ─── */
+
+.ocr-progress-wrap {
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.ocr-progress-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  display: block;
+  animation: ocr-spin 1.5s linear infinite;
+}
+
+@keyframes ocr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ocr-progress-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  margin-bottom: 0.75rem;
+}
+
+.ocr-progress-bar-track {
+  background: var(--slate-200);
+  border-radius: var(--radius-full);
+  height: 8px;
+  overflow: hidden;
+  margin: 0 auto;
+  max-width: 320px;
+}
+
+.ocr-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.ocr-progress-pct {
+  font-size: 0.85rem;
+  color: var(--slate-500);
+  margin-top: 0.5rem;
+}
+
+/* ─── 추출 결과 검토 영역 ─── */
+
+.ocr-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.ocr-result-meta {
+  font-size: 0.85rem;
+  color: var(--slate-500);
+}
+
+.ocr-result-meta strong {
+  color: var(--slate-700);
+}
+
+/* ─── 경고 배너 ─── */
+
+.ocr-warning-box {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.ocr-warning-title {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ocr-warning-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.82rem;
+  color: #78350f;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* ─── 정답 항목 카드 그리드 ─── */
+
+.ocr-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.ocr-item-card {
+  background: #fff;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: border-color 0.15s;
+}
+
+.ocr-item-card.status-high {
+  border-left: 3px solid var(--success);
+}
+
+.ocr-item-card.status-low {
+  border-left: 3px solid var(--warning);
+}
+
+.ocr-item-card.status-uncertain {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-bg);
+}
+
+.ocr-item-card.status-existing-only {
+  border-left: 3px solid var(--slate-300);
+  background: var(--slate-50);
+}
+
+.ocr-item-qnum {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-500);
+}
+
+.ocr-item-select {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  background: #fff;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.ocr-item-select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.ocr-item-badge {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  display: inline-block;
+  width: fit-content;
+}
+
+.ocr-badge-high    { background: #dcfce7; color: #166534; }
+.ocr-badge-low     { background: #fffbeb; color: #92400e; }
+.ocr-badge-uncertain { background: #fee2e2; color: #991b1b; }
+.ocr-badge-existing  { background: var(--slate-100); color: var(--slate-600); }
+
+/* ─── 변경 사항 미리보기 (Diff 패널) ─── */
+
+.ocr-diff-panel {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.ocr-diff-header {
+  background: var(--slate-100);
+  padding: 0.65rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.ocr-diff-list {
+  list-style: none;
+  padding: 0.5rem 0;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ocr-diff-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+}
+
+.ocr-diff-row:hover {
+  background: var(--slate-50);
+}
+
+.ocr-diff-qnum {
+  font-weight: 700;
+  color: var(--slate-600);
+  min-width: 42px;
+}
+
+.ocr-diff-change {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ocr-diff-old {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.ocr-diff-new {
+  background: #dcfce7;
+  color: #166534;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.ocr-diff-arrow {
+  color: var(--slate-400);
+}
+
+.ocr-diff-tag-add  { background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.ocr-diff-tag-mod  { background: #fef3c7; color: #92400e; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.ocr-diff-tag-keep { background: var(--slate-100); color: var(--slate-500); font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+
+.ocr-diff-empty {
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--slate-500);
+  text-align: center;
+}
+
+/* ─── 오류 상태 ─── */
+
+.ocr-error-box {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+}
+
+.ocr-error-title {
+  font-weight: 700;
+  color: var(--danger);
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.ocr-error-detail {
+  font-size: 0.85rem;
+  color: #7f1d1d;
+}
+
+/* ─── 인식 없음 안내 ─── */
+
+.ocr-no-result-box {
+  padding: 2rem;
+  text-align: center;
+  color: var(--slate-500);
+  background: var(--slate-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+}
+
+.ocr-no-result-icon { font-size: 2.5rem; margin-bottom: 0.75rem; display: block; }
+.ocr-no-result-title { font-weight: 700; font-size: 1rem; color: var(--slate-700); margin-bottom: 0.5rem; }
+.ocr-no-result-desc { font-size: 0.85rem; }
+
+/* ─── 액션 바 (하단 고정) ─── */
+
+.ocr-action-bar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid var(--slate-200);
+  margin-top: 1rem;
+}
+
+/* ─── 모바일 최적화 ─── */
+
+@media (max-width: 480px) {
+  .ocr-items-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ocr-step-label {
+    display: none; /* 좁은 화면에서 단계 텍스트 숨김, 번호만 표시 */
+  }
+
+  .ocr-upload-btns {
+    flex-direction: column;
+  }
+
+  .ocr-action-bar {
+    flex-direction: column;
+  }
+
+  .ocr-action-bar .btn {
+    width: 100%;
+  }
+}
+
+/* ─── 숨김 파일 입력 ─── */
+.ocr-file-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
